@@ -1,8 +1,9 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "rss-board",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "RSS dashboard for Obsidian",
 	"main": "main.js",
+	"type": "commonjs",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
@@ -20,5 +21,10 @@
 		"obsidian": "latest",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
+	},
+	"dependencies": {
+		"@mozilla/readability": "^0.6.0",
+		"rss-parser": "^3.13.0",
+		"turndown": "^7.2.0"
 	}
 }

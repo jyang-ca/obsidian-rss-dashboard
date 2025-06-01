@@ -1,134 +1,494 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {
+    App,
+    Plugin,
+    Notice,
+    TFile,
+    requestUrl,
+    WorkspaceLeaf
+} from "obsidian";
 
-// Remember to rename these classes and interfaces!
+import { 
+    RssDashboardSettings,
+    DEFAULT_SETTINGS,
+    Feed,
+    FeedItem,
+    Folder,
+    Tag
+} from "./src/types";
 
-interface MyPluginSettings {
-	mySetting: string;
-}
+import { RssDashboardSettingTab } from "./src/settings/settings-tab";
+import { RssDashboardView, RSS_DASHBOARD_VIEW_TYPE } from "./src/views/dashboard-view";
+import { ReaderView, RSS_READER_VIEW_TYPE } from "./src/views/reader-view";
+import { FeedParser } from "./src/services/feed-parser";
+import { ArticleSaver } from "./src/services/article-saver";
+import { OpmlManager } from "./src/services/opml-manager";
+import { MediaService } from "./src/services/media-service";
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+export default class RssDashboardPlugin extends Plugin {
+    settings: RssDashboardSettings;
+    view: RssDashboardView;
+    readerView: ReaderView;
+    feedParser: FeedParser;
+    articleSaver: ArticleSaver;
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+    async onload() {
+        console.log("Loading RSS Dashboard plugin");
+        
+        
+        await this.loadSettings();
+        
+        try {
+            
+            this.feedParser = new FeedParser(this.settings.media, this.settings.availableTags);
+            this.articleSaver = new ArticleSaver(this.app.vault, this.settings.articleSaving);
+            
+            
+            this.registerView(
+                RSS_DASHBOARD_VIEW_TYPE,
+                (leaf) => {
+                    
+                    this.view = new RssDashboardView(leaf, this);
+                    return this.view;
+                }
+            );
+            
+            this.registerView(
+                RSS_READER_VIEW_TYPE,
+                (leaf) => {
+                    
+                    this.readerView = new ReaderView(
+                        leaf, 
+                        this.settings, 
+                        this.articleSaver,
+                        this.onArticleSaved.bind(this)
+                    );
+                    return this.readerView;
+                }
+            );
+    
+            
+            this.addRibbonIcon("rss", "RSS Dashboard", () => {
+                this.activateView();
+            });
+    
+            
+            this.addSettingTab(new RssDashboardSettingTab(this.app, this));
+    
+            
+            this.addCommand({
+                id: "open-rss-dashboard",
+                name: "Open RSS Dashboard",
+                callback: () => {
+                    this.activateView();
+                },
+            });
+    
+            this.addCommand({
+                id: "refresh-rss-feeds",
+                name: "Refresh RSS Feeds",
+                callback: () => {
+                    this.refreshFeeds();
+                },
+            });
+    
+            this.addCommand({
+                id: "import-opml",
+                name: "Import OPML",
+                callback: () => {
+                    this.importOpml();
+                },
+            });
+    
+            this.addCommand({
+                id: "export-opml",
+                name: "Export OPML",
+                callback: () => {
+                    this.exportOpml();
+                },
+            });
+    
+            this.addCommand({
+                id: "toggle-rss-sidebar",
+                name: "Toggle RSS Dashboard Sidebar",
+                callback: () => {
+                    if (this.view) {
+                        this.settings.sidebarCollapsed = !this.settings.sidebarCollapsed;
+                        this.saveSettings();
+                        this.view.render();
+                    }
+                },
+            });
+    
+            
+            this.registerInterval(
+                window.setInterval(
+                    () => this.refreshFeeds(),
+                    this.settings.refreshInterval * 60 * 1000
+                )
+            );
+            
+            console.log("RSS Dashboard plugin loaded successfully");
+        } catch (error) {
+            console.error("Error initializing RSS Dashboard plugin:", error);
+            new Notice("Error initializing RSS Dashboard plugin. Check console for details.");
+        }
+    }
 
-	async onload() {
-		await this.loadSettings();
+    async activateView() {
+        const { workspace } = this.app;
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+        try {
+            let leaf: WorkspaceLeaf | null = null;
+            const leaves = workspace.getLeavesOfType(RSS_DASHBOARD_VIEW_TYPE);
+    
+            if (leaves.length > 0) {
+                
+                leaf = leaves[0];
+            } else {
+                
+                switch (this.settings.viewLocation) {
+                    case "left-sidebar":
+                        leaf = workspace.getLeftLeaf(false);
+                        break;
+                    case "right-sidebar":
+                        leaf = workspace.getRightLeaf(false);
+                        break;
+                    case "main":
+                    default:
+                        leaf = workspace.getLeaf("tab");
+                        break;
+                }
+    
+                if (leaf) {
+                    await leaf.setViewState({
+                        type: RSS_DASHBOARD_VIEW_TYPE,
+                        active: true,
+                    });
+                }
+            }
+    
+            if (leaf) {
+                workspace.revealLeaf(leaf);
+            }
+        } catch (error) {
+            console.error("Error activating RSS Dashboard view:", error);
+            new Notice("Error opening RSS Dashboard. Check console for details.");
+        }
+    }
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+    
+    private onArticleSaved(item: FeedItem): void {
+        
+        if (item.feedUrl) {
+            const feed = this.settings.feeds.find(f => f.url === item.feedUrl);
+            if (feed) {
+                const originalItem = feed.items.find(i => i.guid === item.guid);
+                if (originalItem) {
+                    originalItem.saved = true;
+                    
+                    
+                    if (this.settings.articleSaving.addSavedTag) {
+                        if (!originalItem.tags) {
+                            originalItem.tags = [];
+                        }
+                        
+                        
+                        if (!originalItem.tags.some(t => t.name.toLowerCase() === "saved")) {
+                            const savedTag = this.settings.availableTags.find(t => t.name.toLowerCase() === "saved");
+                            if (savedTag) {
+                                originalItem.tags.push({ ...savedTag });
+                            } else {
+                                originalItem.tags.push({ name: "saved", color: "#3498db" });
+                            }
+                        }
+                    }
+                    
+                    this.saveSettings();
+                    
+                    
+                    if (this.view) {
+                        this.view.render();
+                    }
+                }
+            }
+        }
+    }
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+    async refreshFeeds() {
+        try {
+            new Notice("Refreshing feeds...");
+            
+            const updatedFeeds = await this.feedParser.refreshAllFeeds(this.settings.feeds);
+            this.settings.feeds = updatedFeeds;
+            
+            
+            await this.saveSettings();
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
+            
+            if (this.view) {
+                this.view.refresh();
+                new Notice("All feeds refreshed");
+            }
+        } catch (error) {
+            console.error("Error refreshing feeds:", error);
+            new Notice(`Error refreshing feeds: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+    
+    async updateArticle(
+        articleGuid: string,
+        feedUrl: string,
+        updates: Partial<FeedItem>
+    ) {
+        
+        const feed = this.settings.feeds.find((f) => f.url === feedUrl);
+        if (!feed) return;
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+        
+        const article = feed.items.find((item) => item.guid === articleGuid);
+        if (!article) return;
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
+        
+        Object.assign(article, updates);
 
-	onunload() {
+        
+        await this.saveSettings();
 
-	}
+        
+        if (this.view) {
+            this.view.refresh();
+        }
+    }
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
+    async importOpml() {
+        
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".opml";
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
+        input.onchange = async (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+            if (file) {
+                const reader = new FileReader();
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
+                reader.onload = async (e) => {
+                    const contents = e.target?.result as string;
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
+                    try {
+                        
+                        const result = await OpmlManager.importOpml(
+                            contents, 
+                            this.settings.feeds,
+                            this.settings.folders
+                        );
+                        
+                        
+                        this.settings.feeds = result.feeds;
+                        this.settings.folders = result.folders;
+                        
+                        await this.saveSettings();
+                        await this.refreshFeeds();
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+                        
+                        new Notice(`OPML import successful`);
+                    } catch (error) {
+                        console.error("Error parsing OPML:", error);
+                        new Notice("Failed to import OPML: Invalid format");
+                    }
+                };
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+                reader.readAsText(file);
+            }
+        };
 
-	display(): void {
-		const {containerEl} = this;
+        input.click();
+    }
 
-		containerEl.empty();
+    async exportOpml() {
+        
+        const opmlContent = OpmlManager.generateOpml(
+            this.settings.feeds,
+            this.settings.folders
+        );
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+        
+        const blob = new Blob([opmlContent], { type: "text/xml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "obsidian-rss-feeds.opml";
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    
+    async addFolder(folderName: string) {
+        
+        const folderExists = this.settings.folders.some(f => f.name === folderName);
+        
+        if (!folderExists) {
+            
+            this.settings.folders.push({ name: folderName, subfolders: [] });
+            await this.saveSettings();
+            
+            if (this.view) {
+                this.view.refresh();
+                new Notice(`Folder "${folderName}" created`);
+            }
+        } else {
+            new Notice(`Folder "${folderName}" already exists`);
+        }
+    }
+
+    
+    async addFeed(title: string, url: string, folder: string) {
+        try {
+            
+            if (this.settings.feeds.some((f) => f.url === url)) {
+                new Notice("This feed URL already exists");
+                return;
+            }
+    
+            
+            const newFeed: Feed = {
+                title,
+                url,
+                folder,
+                items: [],
+                lastUpdated: 0
+            };
+    
+            
+            this.settings.feeds.push(newFeed);
+            await this.saveSettings();
+            
+            
+            try {
+                const parsedFeed = await this.feedParser.parseFeed(url, newFeed);
+                
+                
+                const index = this.settings.feeds.findIndex(f => f.url === url);
+                if (index >= 0) {
+                    this.settings.feeds[index] = parsedFeed;
+                }
+                
+                await this.saveSettings();
+            } catch (error) {
+                console.error("Error parsing new feed:", error);
+                new Notice(`Error parsing feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+    
+            if (this.view) {
+                this.view.refresh();
+                new Notice(`Feed "${title}" added`);
+            }
+        } catch (error) {
+            console.error("Error adding feed:", error);
+            new Notice(`Error adding feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    
+    async addYouTubeFeed(input: string, customTitle?: string) {
+        try {
+            
+            const feedUrl = await MediaService.getYouTubeRssFeed(input);
+            
+            if (!feedUrl) {
+                new Notice("Unable to determine YouTube feed URL from input");
+                return;
+            }
+            
+            
+            if (this.settings.feeds.some(f => f.url === feedUrl)) {
+                new Notice("This YouTube feed already exists");
+                return;
+            }
+            
+            
+            const title = customTitle || `YouTube: ${input}`;
+            await this.addFeed(title, feedUrl, this.settings.media.defaultYouTubeFolder);
+            
+        } catch (error) {
+            console.error("Error adding YouTube feed:", error);
+            new Notice(`Error adding YouTube feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    
+    async addSubfolder(parentFolderName: string, subfolderName: string) {
+        
+        const parentFolder = this.settings.folders.find(
+            (f) => f.name === parentFolderName
+        );
+        
+        if (parentFolder) {
+            
+            if (!parentFolder.subfolders.some((sf) => sf.name === subfolderName)) {
+                parentFolder.subfolders.push({
+                    name: subfolderName,
+                    subfolders: [],
+                });
+                
+                await this.saveSettings();
+                
+                if (this.view) {
+                    this.view.refresh();
+                    new Notice(`Subfolder "${subfolderName}" created under "${parentFolderName}"`);
+                }
+            } else {
+                new Notice(`Subfolder "${subfolderName}" already exists in "${parentFolderName}"`);
+            }
+        }
+    }
+
+    
+    async editFeed(feed: Feed, newTitle: string, newUrl: string, newFolder: string) {
+        feed.title = newTitle;
+        feed.url = newUrl;
+        feed.folder = newFolder;
+        
+        await this.saveSettings();
+        
+        if (this.view) {
+            this.view.refresh();
+            new Notice(`Feed "${newTitle}" updated`);
+        }
+    }
+
+    async loadSettings() {
+        try {
+            let data = await this.loadData();
+            
+            
+            this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+            
+            
+            if (!this.settings.readerViewLocation) {
+                this.settings.readerViewLocation = "right-sidebar";
+            }
+            
+            
+            if (this.settings.useWebViewer === undefined) {
+                this.settings.useWebViewer = true;
+            }
+        } catch (error) {
+            console.error("Error loading settings:", error);
+            new Notice(`Error loading settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            this.settings = DEFAULT_SETTINGS;
+        }
+    }
+
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
+
+    onunload() {
+        console.log("Unloading RSS Dashboard plugin");
+        this.app.workspace.detachLeavesOfType(RSS_DASHBOARD_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(RSS_READER_VIEW_TYPE);
+    }
 }
