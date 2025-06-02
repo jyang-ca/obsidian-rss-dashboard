@@ -1,4 +1,5 @@
 <h1 align="center">RSS Dashboard</h1>
+<h4 align="center">Consume What you Want</h4>
 <h4 align="center">Stream the world's knowledge into your vault: RSS, podcasts, and YouTube, all in one Dashboard</h4>
 
 <p align="center">
@@ -28,6 +29,8 @@
 <p align="center">
 <a href="https://www.buymeacoffee.com/amatya_aditya"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a pizza&emoji=🍕&slug=amatya_aditya&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
 </p>
+
+<p align="center"> <a href="<script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#7c73f5', 'Y8Y41FV4WI');kofiwidget2.draw();</script> "> </p>
 
 
 <p align="center">
