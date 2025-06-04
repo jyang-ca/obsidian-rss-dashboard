@@ -69,24 +69,16 @@ If you encounter any issues or have suggestions, Create an issue on GitHub.
 <a href="https://www.buymeacoffee.com/amatya_aditya"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a pizza&emoji=🍕&slug=amatya_aditya&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
 
 
-# Roadmap (In no specific Order)
+# Roadmap 
 
-1. Enhanced Podcast Integration
-  - Implementation of a minimal podcast player
-    - playback speed control 
-    - download management
-    - auto-download settings
-    - sleep timer
-    - timestamp notes
-2. Filter and Group
-  - based on date ranges
-3. More Dashboard View
-4. Keyboard Shortcuts
-5. Analytics and Insights
-  - Reading Statistics
-6. Youtube Video
-  - Youtube Playlist Integration
-  - timestamp notes
+- [ ] Implementation of minimal Podcast Player
+- [ ] Highlights and Comments
+- [ ] Enhanced Filter and Group
+- [ ] More Dashboard Views
+- [ ] Keyboard Shortcuts
+- [ ] Analytics and Insights
+- [ ] Youtube Playlist Integration
+	- [ ] Timestamp Notes from Podcast and Youtube
 
 # Other Plugins by me
 
