@@ -126,11 +126,16 @@ export class ArticleSaver {
      * Create a sanitized filename
      */
     private sanitizeFilename(name: string): string {
-        return name
-            .replace(/[\/\\:*?"<>|]/g, '_')
-            .replace(/\s+/g, '_')
-            .replace(/_+/g, '_')
-            .substring(0, 100); 
+        // Remove special characters and clean up spaces
+        let sanitized = name
+            .replace(/[\/\\:*?"<>|]/g, '') // Remove invalid characters
+            .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+            .trim(); // Remove leading/trailing spaces
+
+        // Take first 5 words and limit total length to 50 characters
+        const words = sanitized.split(' ');
+        const shortened = words.slice(0, 5).join(' ');
+        return shortened.substring(0, 50);
     }
     
     /**

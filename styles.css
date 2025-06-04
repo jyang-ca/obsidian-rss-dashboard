@@ -816,7 +816,8 @@
 	align-items: center;
 	padding: 10px;
 	border-bottom: 1px solid var(--background-modifier-border);
-	background-color: var(--background-secondary)
+	background-color: var(--background-secondary);
+	border-radius: 10px;
   }
   .rss-reader-back-button {
 	cursor: pointer;
@@ -1753,8 +1754,10 @@
 }
 
 .modal-container.mod-dim .modal {
-    width: 65vw;
+    width: auto;
+	min-width: 50vw;
 }
+
 
 .rss-dashboard-modal input, .rss-dashboard-modal textarea, .feed-manager-modal input, .feed-manager-modal textarea {
     width: 100%;

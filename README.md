@@ -1,5 +1,5 @@
 <h1 align="center">RSS Dashboard</h1>
-<h4 align="center">Consume What you Want</h4>
+<h4 align="center">Only the feeds you need</h4>
 <h4 align="center">Stream the world's knowledge into your vault: RSS, podcasts, and YouTube, all in one Dashboard</h4>
 
 <p align="center">
