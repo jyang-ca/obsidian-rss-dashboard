@@ -34,7 +34,7 @@
 
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=Ie73HjSW85Y" target="_blank">
+  <a href="https://youtu.be/YwBu3Kdn1Qk" target="_blank">
     <img src="https://upload.wikimedia.org/wikipedia/commons/b/b8/YouTube_play_button_icon_%282013%E2%80%932017%29.svg" 
          style="width: 50px; height: auto; ">
   </a>
