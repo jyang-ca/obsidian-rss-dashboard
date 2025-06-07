@@ -22,6 +22,7 @@ export class RssDashboardView extends ItemView {
     private sidebar: Sidebar;
     private articleList: ArticleList;
     private sidebarContainer: HTMLElement | null = null;
+    private articleListContainer: HTMLElement | null = null;
     
     constructor(
         leaf: WorkspaceLeaf, 
@@ -121,53 +122,53 @@ export class RssDashboardView extends ItemView {
      * Main render method
      */
     render(): void {
-        // Add sidebar-collapsed class to container when sidebar is collapsed
+        const { containerEl } = this;
+        containerEl.empty();
+
+        // Create main container
+        const mainContainer = containerEl.createDiv("rss-dashboard-container");
+
+        // Create sidebar container
+        this.sidebarContainer = mainContainer.createDiv("rss-dashboard-sidebar");
         if (this.settings.sidebarCollapsed) {
-            this.containerEl.addClass('sidebar-collapsed');
-        } else {
-            this.containerEl.removeClass('sidebar-collapsed');
+            this.sidebarContainer.addClass("collapsed");
         }
 
-        if (this.sidebar) {
-            this.sidebar["options"] = {
-                currentFolder: this.currentFolder,
-                currentFeed: this.currentFeed,
-                currentTag: this.currentTag,
-                tagsCollapsed: this.tagsCollapsed,
-                collapsedFolders: this.collapsedFolders
-            };
-            this.sidebar["settings"] = this.settings;
-            this.sidebar.render();
-        }
-
+        // Create article list container
+        this.articleListContainer = mainContainer.createDiv("rss-dashboard-article-list");
         
-        const container = this.containerEl.children[1];
-        let dashboardContainer = container.querySelector('.rss-dashboard-layout') as HTMLElement;
-        if (!dashboardContainer) {
-            dashboardContainer = container.createDiv({ cls: "rss-dashboard-layout" });
-        }
-        let contentContainer = dashboardContainer.querySelector('.rss-dashboard-content') as HTMLElement;
-        if (!contentContainer) {
-            contentContainer = dashboardContainer.createDiv({ cls: "rss-dashboard-content" });
-        } else {
-            contentContainer.empty();
-        }
-        const articlesContainer = contentContainer.createDiv({ cls: "rss-dashboard-articles" });
-        this.articleList = new ArticleList(
-            articlesContainer,
-            this.settings,
-            this.getArticlesTitle(),
-            this.getFilteredArticles(),
-            this.selectedArticle,
-            {
-                onArticleClick: this.handleArticleClick.bind(this),
-                onToggleViewStyle: this.handleToggleViewStyle.bind(this),
-                onRefreshFeeds: this.handleRefreshFeeds.bind(this),
-                onCardSizeChange: this.handleCardSizeChange.bind(this),
-                onArticleUpdate: this.handleArticleUpdate.bind(this),
-                onArticleSave: this.handleArticleSave.bind(this)
-            }
-        );
+        // Render article list header with mark all buttons
+        this.renderArticleListHeader();
+
+        // Create sidebar
+        this.sidebar = new Sidebar(this.sidebarContainer, {
+            currentFolder: this.currentFolder,
+            currentFeed: this.currentFeed,
+            currentTag: this.currentTag,
+            tagsCollapsed: this.tagsCollapsed,
+            collapsedFolders: this.collapsedFolders,
+        }, this.settings, {
+            onFeedClick: this.handleFeedClick.bind(this),
+            onFolderClick: this.handleFolderClick.bind(this),
+            onTagClick: this.handleTagClick.bind(this),
+            onToggleTags: this.handleToggleTags.bind(this),
+            onToggleFolder: this.handleToggleFolder.bind(this),
+            onAddFeed: this.handleAddFeed.bind(this),
+            onEditFeed: this.handleEditFeed.bind(this),
+            onDeleteFeed: this.handleDeleteFeed.bind(this),
+        });
+
+        // Create article list
+        this.articleList = new ArticleList(this.articleListContainer, this.getFilteredArticles(), {
+            onArticleClick: this.handleArticleClick.bind(this),
+            onArticleUpdate: this.updateArticleStatus.bind(this),
+            onArticleSave: this.handleArticleSave.bind(this),
+            onArticleStar: this.handleArticleStar.bind(this),
+            onArticleTag: this.handleArticleTag.bind(this),
+        });
+
+        // Render sidebar and article list
+        this.sidebar.render();
         this.articleList.render();
     }
     
@@ -733,5 +734,52 @@ export class RssDashboardView extends ItemView {
 
     async onClose(): Promise<void> {
         
+    }
+
+    private async markAllAsRead(): Promise<void> {
+        for (const feed of this.settings.feeds) {
+            for (const item of feed.items) {
+                if (!item.read) {
+                    await this.updateArticleStatus(item, { read: true }, false);
+                }
+            }
+        }
+        this.render();
+        new Notice("All articles marked as read");
+    }
+
+    private async markAllAsUnread(): Promise<void> {
+        for (const feed of this.settings.feeds) {
+            for (const item of feed.items) {
+                if (item.read) {
+                    await this.updateArticleStatus(item, { read: false }, false);
+                }
+            }
+        }
+        this.render();
+        new Notice("All articles marked as unread");
+    }
+
+    private renderArticleListHeader(): void {
+        if (!this.articleListContainer) return;
+
+        const header = this.articleListContainer.createDiv("rss-dashboard-article-list-header");
+        
+        // Add mark all buttons
+        const buttonContainer = header.createDiv("rss-dashboard-mark-all-buttons");
+        
+        const markAllReadBtn = buttonContainer.createEl("button", {
+            text: "Mark All as Read",
+            cls: "rss-dashboard-mark-all-button"
+        });
+        markAllReadBtn.addEventListener("click", () => this.markAllAsRead());
+
+        const markAllUnreadBtn = buttonContainer.createEl("button", {
+            text: "Mark All as Unread",
+            cls: "rss-dashboard-mark-all-button"
+        });
+        markAllUnreadBtn.addEventListener("click", () => this.markAllAsUnread());
+
+        // ... existing code ...
     }
 }

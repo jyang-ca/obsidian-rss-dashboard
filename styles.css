@@ -2042,3 +2042,29 @@ input.color-circle {
 	left: 0;
   }
 
+  .rss-dashboard-article-list-header {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.rss-dashboard-mark-all-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.rss-dashboard-mark-all-button {
+    padding: 4px 8px;
+    background-color: var(--background-primary-alt);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s ease;
+}
+
+.rss-dashboard-mark-all-button:hover {
+    background-color: var(--background-modifier-hover);
+}
